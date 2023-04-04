@@ -1700,7 +1700,7 @@ Public Class SelectSketchInView
                     refModel = view.ReferencedDocument
                     Dim configName As String = view.ReferencedConfiguration
                     ' Activate the reference document so that we can traverse its structure
-                    Dim errorCode As Long
+                    'Dim errorCode As Long
                     'refModel = model.Application.Instance.ActivateDoc2(refModel.GetPathName, True, errorCode)
                     If Not refModel.ShowConfiguration2(configName) Then
                         Me.Report.WriteEntry(ReportingLevel.Verbose, ReportEntryType.Warning, "Model Generation Task", TASKNAME, "Unable to activate configuration", String.Format("Component: {0}; Configuration: {1}", refModel.GetPathName, configName))

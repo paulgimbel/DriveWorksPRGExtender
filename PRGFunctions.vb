@@ -292,45 +292,45 @@ Public Class PRGFunctions
     End Function
 
 
-    <Udf()>
-    <FunctionInfo("Multi-level Sort of a Table", "PRG")>
-    Public Function PRGTableSort(<ParamInfo("Table", "Unsorted Table")> ByVal inputTable As IArrayValue, <ParamInfo("Columns", "Column names or indices to sort")> ByVal Columns As String()) As String
+    '<Udf()>
+    '<FunctionInfo("Multi-level Sort of a Table", "PRG")>
+    'Public Function PRGTableSort(<ParamInfo("Table", "Unsorted Table")> ByVal inputTable As IArrayValue, <ParamInfo("Columns", "Column names or indices to sort")> ByVal Columns As String()) As String
 
-        If inputTable Is Nothing Or inputTable.Rows <= 0 Or inputTable.Columns <= 0 Then
-            Return String.Empty
-        End If
+    '    If inputTable Is Nothing Or inputTable.Rows <= 0 Or inputTable.Columns <= 0 Then
+    '        Return String.Empty
+    '    End If
 
-        Dim comparison = StringComparison.Ordinal
+    '    Dim comparison = StringComparison.Ordinal
 
-        ' ToDo: Add in ignore case on the column names?
-
-
-
-        ' Get Column Indices
-        Dim colIndices As New List(Of Integer)
-        For Each colInput As String In Columns
-            Dim columnFound As Boolean = False
-            For colIndex As Integer = 0 To inputTable.Columns - 1
-                Dim colHeader = inputTable.GetElementAsString(Globalization.CultureInfo.CurrentUICulture, 0, colIndex)
-                If String.Equals(colHeader, colInput, comparison) Then
-                    colIndices.Add(colIndex)
-                    columnFound = True
-                    Exit For
-                Else
-
-                End If
-            Next
-        Next
-
-        ' Filter the table
+    '    ' ToDo: Add in ignore case on the column names?
 
 
 
-        Dim sortedTable As IArrayValue
+    '    ' Get Column Indices
+    '    Dim colIndices As New List(Of Integer)
+    '    For Each colInput As String In Columns
+    '        Dim columnFound As Boolean = False
+    '        For colIndex As Integer = 0 To inputTable.Columns - 1
+    '            Dim colHeader = inputTable.GetElementAsString(Globalization.CultureInfo.CurrentUICulture, 0, colIndex)
+    '            If String.Equals(colHeader, colInput, comparison) Then
+    '                colIndices.Add(colIndex)
+    '                columnFound = True
+    '                Exit For
+    '            Else
 
-        Return sortedTable
+    '            End If
+    '        Next
+    '    Next
 
-    End Function
+    '    ' Filter the table
+
+
+
+    '    Dim sortedTable As IArrayValue
+
+    '    Return sortedTable
+
+    'End Function
 
 
     <Udf()>

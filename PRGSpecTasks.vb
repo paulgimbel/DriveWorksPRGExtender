@@ -200,13 +200,14 @@ Public Class PRGGetModelList
         }
 
         ' Make sure that the deferred drawing list has no blanks and has an extension on all of the deferred drawing names, unless it's an asterisk
-        Dim defDrwList() As String = mDeferredDrawings.Value.Split(New String() {"|"}, StringSplitOptions.RemoveEmptyEntries).Select(Function(drwName) As String
-                                                                                                                                         If String.Equals(drwName, "*", StringComparison.Ordinal) OrElse
-                                                                                                                                 Not String.IsNullOrEmpty(Path.GetExtension(drwName)) Then
-                                                                                                                                             Return drwName
-                                                                                                                                         End If
-                                                                                                                                         Return String.Format("{0}.slddrw", drwName)
-                                                                                                                                     End Function)
+        Dim defDrwList = mDeferredDrawings.Value.Split(New String() {"|"}, StringSplitOptions.RemoveEmptyEntries).
+                                                                Select(Function(drwName) As String
+                                                                           If String.Equals(drwName, "*", StringComparison.Ordinal) OrElse
+                                                                               Not String.IsNullOrEmpty(Path.GetExtension(drwName)) Then
+                                                                               Return drwName
+                                                                           End If
+                                                                           Return String.Format("{0}.slddrw", drwName)
+                                                                       End Function)
         Dim deferredDrawingList As String = String.Join("|", defDrwList)
         ' Perform the release and get the results
         Dim relResults = ReleaseComponentHelper.Release(env, ctx, inputString, relTracker, deferredDrawingList)
