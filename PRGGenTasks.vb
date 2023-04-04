@@ -301,6 +301,29 @@ Namespace DriveWorksPRGExtender
 
     End Class
 
+    <GenerationTask("Get List Of Models and Drawings",
+                    "Obtain a list of all models and drawings to be generated from this generation context",
+                    "embedded://DriveWorksPRGExtender.bomb.bmp",
+                    "PRG Tasks", GenerationTaskScope.Assemblies, ComponentTaskSequenceLocation.Before + ComponentTaskSequenceLocation.After + ComponentTaskSequenceLocation.PreClose)>
+    Public Class GetListOfModels
+        Inherits GenerationTask
+
+        Private Const OUTPUT_PATH As String = "GenerationTask.outputPath"
+
+        Public Overrides ReadOnly Property Parameters As ComponentTaskParameterInfo()
+            Get
+                Return New ComponentTaskParameterInfo() {
+                        New ComponentTaskParameterInfo(OUTPUT_PATH, "Output Path", "Path to store the list (ex. \\MyServer\MyShare\Subfolder\filename.txt)")
+                }
+            End Get
+        End Property
+
+        Const taskName = "Get Model and Drawing List"
+
+        Public Overrides Sub Execute(model As SldWorksModelProxy, component As ReleasedComponent, generationSettings As GenerationSettings)
+
+        End Sub
+    End Class
 
     <GenerationTask("Mate with Mate References",
                     "Select mate references from two components to mate them together",
@@ -393,51 +416,67 @@ Namespace DriveWorksPRGExtender
 
                         ' Select Reference 1
                         Dim mrRef1Type As swSelectType_e
-                        Dim ref1SelectResult As Boolean
                         mrRef1Type = mr1.ReferenceEntityType(j)
                         Dim mrRef1TypeString As String = GetEntityName(mrRef1Type)
                         Dim mrRef1 As SolidWorks.Interop.sldworks.IEntity = mr1.ReferenceEntity2(j)
                         If mrRef1 Is Nothing Then
                             Me.Report.WriteEntry(ReportingLevel.Minimal, ReportEntryType.Information, "Generation Task", taskName, "Reference for Component 1 could not be found", "")
                         Else
-                            'ref1SelectResult = model.Model.Extension.SelectByID2(mrRef1.Name & "@" & comp1Name & "@" & AssyName, mrRef1TypeString, 0#, 0#, 0#, False, -1, Nothing, swSelectOption_e.swSelectOptionDefault)
+                            Dim corrEnt1 As Entity = swComp1.GetCorresponding(mrRef1)
+                            If corrEnt1 IsNot Nothing Then
+                                corrEnt1.Select2(False, 1)
+                            Else
+                            End If
                         End If
-                        selData.Mark = 1 ' 1 for Coincident
-                        ref1SelectResult = mrRef1.Select3(False, 1, Nothing)
-                        'ref1SelectResult = mrRef1.Select4(True, selData)
-                        'Dim obj1 As Object = SelMgr.GetSelectedObject6(1, 2)
 
                         ' Select Reference 2
                         Dim mrRef2Type As swSelectType_e
-                        Dim ref2SelectResult As Boolean
                         mrRef2Type = mr2.ReferenceEntityType(j)
                         Dim mrRef2TypeString As String = GetEntityName(mrRef2Type)
                         Dim mrRef2 As SolidWorks.Interop.sldworks.IEntity = mr2.ReferenceEntity2(j)
                         If mrRef2 Is Nothing Then
                             Me.Report.WriteEntry(ReportingLevel.Minimal, ReportEntryType.Information, "Generation Task", taskName, "Reference for Component 2 could not be found", "")
                         Else
-                            'ref2SelectResult = model.Model.Extension.SelectByID2(mrRef2.Name & "@" & comp2Name & "@" & AssyName, mrRef2TypeString, 0#, 0#, 0#, True, -1, Nothing, swSelectOption_e.swSelectOptionDefault)
+                            ' Get the component and select the Persistent ID of the entity
+                            Dim corrEnt2 As Entity = swComp2.GetCorresponding(mrRef2)
+                            If corrEnt2 IsNot Nothing Then
+                                corrEnt2.Select2(True, 1)
+                            Else
+                            End If
                         End If
-                        'ref2SelectResult = mrRef2.Select(True)
-                        'ref2SelectResult = mrRef2.Select2(True, 2)
-                        ref2SelectResult = mrRef2.Select3(True, 1, Nothing)
-                        'ref2SelectResult = mrRef2.Select4(True, selData)
-                        'Dim obj2 As Object = SelMgr.GetSelectedObject6(1, 2)
 
 
                         ' Create the mate
-                        Dim mateData As MateFeatureData = assy.CreateMateData(mr1.ReferenceType(j))
-                        mateData.TypeName = swMateType_e.swMateCOINCIDENT
-                        Dim mark As Integer = 0
+                        ' ToDo: Set the alignment conditions
+                        Dim mr1Align = mr1.ReferenceAlignment(j)
+                        Dim mr2Align = mr2.ReferenceAlignment(j)
                         Select Case mr1.ReferenceType(j)
                             Case swMateReferenceType_e.swMateReferenceType_Coincident
-                                Dim coincMateData As CoincidentMateFeatureData = TryCast(mateData, CoincidentMateFeatureData)
-                                coincMateData.EntitiesToMate(0) = SelMgr.GetSelectedObject6(0, 1)
-                                coincMateData.EntitiesToMate(1) = SelMgr.GetSelectedObject6(1, 1)
+                                Dim coincMateData As CoincidentMateFeatureData = assy.CreateMateData(swMateType_e.swMateCOINCIDENT)
+                                Dim EntitiesToMate(1) As Object
+                                EntitiesToMate(0) = SelMgr.GetSelectedObject6(1, 1)
+                                EntitiesToMate(1) = SelMgr.GetSelectedObject6(2, 1)
+                                coincMateData.EntitiesToMate = EntitiesToMate
+                                coincMateData.MateAlignment = GetAlignment(mr1Align, mr2Align)
                                 assy.CreateMate(coincMateData)
                             Case swMateReferenceType_e.swMateReferenceType_Concentric
+                                Dim concMateData As ConcentricMateFeatureData = assy.CreateMateData(swMateType_e.swMateCONCENTRIC)
+                                concMateData.EntitiesToMate(0) = SelMgr.GetSelectedObject6(1, 1)
+                                concMateData.EntitiesToMate(1) = SelMgr.GetSelectedObject6(2, 1)
+                                concMateData.MateAlignment = GetAlignment(mr1Align, mr2Align)
+                                assy.CreateMate(concMateData)
                             Case swMateReferenceType_e.swMateReferenceType_Parallel
+                                Dim parMateData As CoincidentMateFeatureData = assy.CreateMateData(swMateType_e.swMatePARALLEL)
+                                parMateData.EntitiesToMate(0) = SelMgr.GetSelectedObject6(1, 1)
+                                parMateData.EntitiesToMate(1) = SelMgr.GetSelectedObject6(2, 1)
+                                parMateData.MateAlignment = GetAlignment(mr1Align, mr2Align)
+                                assy.CreateMate(parMateData)
                             Case swMateReferenceType_e.swMateReferenceType_Tangent
+                                Dim tanMateData As CoincidentMateFeatureData = assy.CreateMateData(swMateType_e.swMateTANGENT)
+                                tanMateData.EntitiesToMate(0) = SelMgr.GetSelectedObject6(1, 1)
+                                tanMateData.EntitiesToMate(1) = SelMgr.GetSelectedObject6(2, 1)
+                                tanMateData.MateAlignment = GetAlignment(mr1Align, mr2Align)
+                                assy.CreateMate(tanMateData)
                             Case Else
                         End Select
 
@@ -714,201 +753,7 @@ Namespace DriveWorksPRGExtender
         End Sub
     End Class
 
-    <GenerationTask("Insert A Revision Table",
-               "Add a Revision to the specified sheer of the drawing",
-               "embedded://DriveWorksPRGExtender.Triangle.bmp",
-               "PRG Tasks", GenerationTaskScope.Drawings, ComponentTaskSequenceLocation.After)>
-    Public Class InsertRevisionTable
-        Inherits GenerationTask
 
-        Private Const SHEET_NAME As String = "SheetName"
-        Private Const ANCHOR_POINT As String = "AnchorPoint"
-        Private Const TEMPLATE_PATH As String = "TemplatePath"
-        Private Const SYMBOL_SHAPE As String = "SymbolShape"
-
-        Private TASKNAME As String = "Insert Revision Table"
-
-        Private Enum AnchorPoint
-            TopRight = swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_TopRight
-            TopLeft = swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_TopLeft
-            BottomRight = swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_BottomRight
-            BottomLeft = swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_BottomLeft
-        End Enum
-
-        Private Enum RevSymbolShape
-            Circle = swRevisionTableSymbolShape_e.swRevisionTable_CircleSymbol
-            Hexagon = swRevisionTableSymbolShape_e.swRevisionTable_HexagonSymbol
-            Square = swRevisionTableSymbolShape_e.swRevisionTable_SquareSymbol
-            Triangle = swRevisionTableSymbolShape_e.swRevisionTable_TriangleSymbol
-        End Enum
-
-        Public Overrides ReadOnly Property Parameters As ComponentTaskParameterInfo()
-            Get
-                Return New ComponentTaskParameterInfo() {
-                    New ComponentTaskParameterInfo(SHEET_NAME,
-                                                   "Sheet Name",
-                                                   "Pipe-delimited list of drawing sheet names to receive revision tables (use * to create tables on all sheets)",
-                                                   "Inputs",
-                                                   New ComponentTaskParameterMetaData(Forms.DataModel.PropertyBehavior.StandardOptionDynamicManual)),
-                    New ComponentTaskParameterInfo(ANCHOR_POINT,
-                                                   "Anchor Point",
-                                                   "Drawing sheet anchor point to use for locating the revision table",
-                                                   "Inputs",
-                                                   New ComponentTaskParameterMetaData(Forms.DataModel.PropertyBehavior.StandardOptionDynamicManual,
-                                                                                      GetType(AnchorPoint), AnchorPoint.TopRight)),
-                    New ComponentTaskParameterInfo(SYMBOL_SHAPE,
-                                                   "Sheet Name",
-                                                   "Shape of the revision symbol to be create by the revision table",
-                                                   "Inputs",
-                                                   New ComponentTaskParameterMetaData(Forms.DataModel.PropertyBehavior.StandardOptionDynamicManual,
-                                                                                      GetType(RevSymbolShape), RevSymbolShape.Triangle)),
-                    New ComponentTaskParameterInfo(TEMPLATE_PATH,
-                                                   "Sheet Name",
-                                                   "Pipe-delimited list of drawing sheet names to receive revision tables (use * to create tables on all sheets)",
-                                                   "Inputs",
-                                                   New ComponentTaskParameterMetaData(Forms.DataModel.PropertyBehavior.StandardOptionDynamicManual))
-                }
-            End Get
-        End Property
-
-        Public Overrides Sub Execute(model As SldWorksModelProxy, component As ReleasedComponent, generationSettings As GenerationSettings)
-            ' Validate Inputs
-            Dim sheetNameString As String = String.Empty
-            Dim sheetNameList As New List(Of String)
-            Dim templateName As String = String.Empty
-            Dim anchorPoint As AnchorPoint
-            Dim revSymbolShape As RevSymbolShape
-            ' Verify that we got data in all of the inputs
-            If Not Me.Data.TryGetParameterValue(SHEET_NAME, True, sheetNameString) Then
-                Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, "No value was provided for the drawing sheet name")
-                Return
-            ElseIf Not Me.Data.TryGetParameterValue(TEMPLATE_PATH, True, templateName) Then
-                Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, "No value was provided for the template path")
-                Return
-            End If
-            If Not Me.Data.TryGetParameterValue(Of AnchorPoint)(ANCHOR_POINT, anchorPoint) Then
-                Me.Report.WriteEntry(ReportingLevel.Verbose, ReportEntryType.Information, "Generation Task", TASKNAME, "No anchor point provided", "Default value will be used")
-                anchorPoint = AnchorPoint.TopRight
-            End If
-            If Not Me.Data.TryGetParameterValue(Of RevSymbolShape)(SYMBOL_SHAPE, revSymbolShape) Then
-                Me.Report.WriteEntry(ReportingLevel.Verbose, ReportEntryType.Information, "Generation Task", TASKNAME, "No revision symbol shape provided", "Default value will be used")
-                Return
-            End If
-
-            Dim swApp As SldWorks = Nothing
-            Dim currentSheet As Sheet = Nothing
-            Dim revTblAnn As RevisionTableAnnotation = Nothing
-            Dim draw As DrawingDoc = Nothing
-            Try
-                draw = model.Drawing
-                For Each sheetName In sheetNameList
-                    ' Switch to the named sheet
-                    currentSheet = draw.GetCurrentSheet
-                    draw.ActivateSheet(sheetName)
-                    revTblAnn = currentSheet.InsertRevisionTable2(True, 0, 0, swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_TopRight, templateName, swRevisionTableSymbolShape_e.swRevisionTable_CircleSymbol, True)
-                Next
-            Catch ex As Exception
-                Me.SetExecutionResult(TaskExecutionResult.Failed, String.Format("Exception: {0}", ex.Message))
-            Finally
-                If swApp IsNot Nothing Then swApp = Nothing
-                If currentSheet IsNot Nothing Then currentSheet = Nothing
-                If revTblAnn IsNot Nothing Then revTblAnn = Nothing
-                If draw IsNot Nothing Then draw = Nothing
-            End Try
-        End Sub
-    End Class
-
-    <GenerationTask("Delete All Rows From Revision Table",
-               "Delete all data rows from a Revision table on the drawing",
-               "embedded://DriveWorksPRGExtender.Triangle.bmp",
-               "SOLIDWORKS PowerPack Drawing",
-               GenerationTaskScope.Drawings,
-               ComponentTaskSequenceLocation.Before Or ComponentTaskSequenceLocation.After)>
-    Public Class ClearRevisionTable
-        Inherits GenerationTask
-
-        Private Const SHEET_NAME As String = "SheetName"
-
-        Public Overrides ReadOnly Property Parameters As ComponentTaskParameterInfo()
-            Get
-                Return New ComponentTaskParameterInfo() {
-                    New ComponentTaskParameterInfo(SHEET_NAME,
-                                                   "Sheet Name",
-                                                   "Pipe-delimited list of drawing sheet names with the revision table to clear (use * to clear tables on all sheets)",
-                                                   "Inputs",
-                                                   New ComponentTaskParameterMetaData(Forms.DataModel.PropertyBehavior.StandardOptionDynamicManual))
-                    }
-            End Get
-        End Property
-
-        Public Overrides Sub Execute(model As SldWorksModelProxy, component As ReleasedComponent, generationSettings As GenerationSettings)
-            ' Validate Inputs
-            Dim sheetNameString As String = String.Empty
-            Dim sheetNameList As New List(Of String)
-
-            If Not Me.Data.TryGetParameterValue(SHEET_NAME, sheetNameString) Then
-                ' No sheet name was received, can't go on
-                Me.SetExecutionResult(TaskExecutionResult.Failed, "No sheet name was found")
-                Return
-            Else
-                sheetNameList = sheetNameString.Split("|").ToList()
-            End If
-
-            Dim swApp As SldWorks = Nothing
-            Dim currentSheet As Sheet = Nothing
-            Dim revTblFeat As RevisionTableFeature = Nothing
-            Dim revTblAnn As RevisionTableAnnotation = Nothing
-            Dim tableAnn As TableAnnotation = Nothing
-            Dim draw As DrawingDoc = Nothing
-            Try
-                swApp = model.Application.Instance
-                draw = model.Drawing
-                If draw Is Nothing Then
-                    Me.SetExecutionResult(TaskExecutionResult.Failed, "Unable to retrieve the drawing")
-                    Return
-                End If
-                If sheetNameString.Contains("*") Then sheetNameList = draw.GetSheetNames.ToList()
-                For Each sheetName In sheetNameList
-                    currentSheet = draw.Sheet(sheetName)
-                    If currentSheet Is Nothing Then
-                        Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, String.Format("Unable to retrieve sheet {0}", sheetName))
-                        Return
-                    End If
-                    revTblAnn = currentSheet.RevisionTable
-                    If revTblAnn Is Nothing Then
-                        Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, "Unable to retrieve a revision table on the current sheet")
-                        Return
-                    End If
-                    tableAnn = revTblAnn
-                    If tableAnn Is Nothing Then
-                        Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, "Unable to retrieve a table annotation for the rev table")
-                        Return
-                    End If
-                    For rowNum = tableAnn.RowCount - 1 To 0 Step -1
-                        Dim rowID As Integer = revTblAnn.GetIdForRowNumber(rowNum)
-                        If Not (rowID = 0) Then
-                            If Not revTblAnn.DeleteRevision(rowID, True) Then
-                                Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, String.Format("Unable to delete revision ID {0}", rowID))
-                            End If
-                        End If
-                    Next
-                Next
-                Me.SetExecutionResult(TaskExecutionResult.Success)
-            Catch ex As Exception
-                Me.SetExecutionResult(TaskExecutionResult.Failed, String.Format("Exception: {0}", ex.Message))
-            Finally
-                If swApp IsNot Nothing Then swApp = Nothing
-                If currentSheet IsNot Nothing Then currentSheet = Nothing
-                If revTblFeat IsNot Nothing Then revTblFeat = Nothing
-                If revTblAnn IsNot Nothing Then revTblAnn = Nothing
-                If tableAnn IsNot Nothing Then tableAnn = Nothing
-                If draw IsNot Nothing Then draw = Nothing
-            End Try
-
-
-        End Sub
-
-    End Class
 
 
 

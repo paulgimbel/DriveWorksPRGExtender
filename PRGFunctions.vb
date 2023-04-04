@@ -3,8 +3,8 @@ Imports DriveWorks.Applications
 Imports DriveWorks.Extensibility
 Imports DriveWorks.Forms
 Imports DriveWorks.Navigation
+Imports SolidWorks.Interop.sldworks
 Imports Titan.Rules.Execution
-
 Public Class PRGFunctions
     Inherits SharedProjectExtender
 
@@ -252,11 +252,10 @@ Public Class PRGFunctions
         For Each row As String In inputRows
             Dim colValues As List(Of String) = row.Split(ColumnDelimiter).ToList
             For Each val As String In colValues
-
             Next val
         Next row
 
-            Return resultTable
+        Return resultTable
 
     End Function
 
@@ -291,5 +290,72 @@ Public Class PRGFunctions
         Return stdArray
 
     End Function
+
+
+    <Udf()>
+    <FunctionInfo("Multi-level Sort of a Table", "PRG")>
+    Public Function PRGTableSort(<ParamInfo("Table", "Unsorted Table")> ByVal inputTable As IArrayValue, <ParamInfo("Columns", "Column names or indices to sort")> ByVal Columns As String()) As String
+
+        If inputTable Is Nothing Or inputTable.Rows <= 0 Or inputTable.Columns <= 0 Then
+            Return String.Empty
+        End If
+
+        Dim comparison = StringComparison.Ordinal
+
+        ' ToDo: Add in ignore case on the column names?
+
+
+
+        ' Get Column Indices
+        Dim colIndices As New List(Of Integer)
+        For Each colInput As String In Columns
+            Dim columnFound As Boolean = False
+            For colIndex As Integer = 0 To inputTable.Columns - 1
+                Dim colHeader = inputTable.GetElementAsString(Globalization.CultureInfo.CurrentUICulture, 0, colIndex)
+                If String.Equals(colHeader, colInput, comparison) Then
+                    colIndices.Add(colIndex)
+                    columnFound = True
+                    Exit For
+                Else
+
+                End If
+            Next
+        Next
+
+        ' Filter the table
+
+
+
+        Dim sortedTable As IArrayValue
+
+        Return sortedTable
+
+    End Function
+
+
+    <Udf()>
+    <FunctionInfo("Get start of a node name", "PRG")>
+    Public Function PRGGetParent(<ParamInfo("Node", "Full name of the node")> ByVal nodeName As String, <ParamInfo("Levels", "Number of levels up to go")> ByVal levels As Double) As String
+
+        Dim nodeList As List(Of String) = nodeName.Split("\").ToList
+        Dim newNodeName As String = String.Empty
+        For index = 1 To nodeList.Count - levels
+            newNodeName = String.Format("{0}{1}{2}", newNodeName, IIf(String.IsNullOrEmpty(newNodeName), "", "\"), nodeList(index - 1))
+        Next
+        Return newNodeName
+    End Function
+
+    <Udf()>
+    <FunctionInfo("Get end of a node name", "PRG")>
+    Public Function PRGGetChild(<ParamInfo("Node", "Full name of the node")> ByVal nodeName As String, <ParamInfo("Levels", "Number of levels up to return")> ByVal levels As Double) As String
+
+        Dim nodeList As List(Of String) = nodeName.Split("\").ToList
+        Dim newNodeName As String = String.Empty
+        For index = nodeList.Count - levels To nodeList.Count
+            newNodeName = String.Format("{0}{1}{2}", newNodeName, IIf(String.IsNullOrEmpty(newNodeName), "", "\"), nodeList(index - 1))
+        Next
+        Return newNodeName
+    End Function
+
 
 End Class

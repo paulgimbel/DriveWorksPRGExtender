@@ -1,8 +1,12 @@
-﻿Imports DriveWorks
+﻿Imports System.IO
+Imports DriveWorks
+Imports DriveWorks.Components
 Imports DriveWorks.EventFlow
 Imports DriveWorks.Forms
+Imports DriveWorks.Navigation
 Imports DriveWorks.Reporting
 Imports DriveWorks.Security
+Imports DriveWorks.SolidWorks.Components
 Imports DriveWorks.Specification
 Imports Titan.Rules.Execution
 
@@ -119,4 +123,139 @@ Public Class setPrefs
     End Sub
 End Class
 
+<Task("Add Label", "embedded://DriveWorksPRGExtender.bomb.bmp", "PRG")>
+Public Class addLabel
+    Inherits Task
 
+    Dim mLabelName As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Label Name", New FlowPropertyInfo("Name of the label to create", "Input"))
+    Dim mLabelText As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Label Text", New FlowPropertyInfo("Text for the label ", "Input"))
+    Dim mFormName As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Form Name", New FlowPropertyInfo("Form to add the label to", "Input"))
+    Dim mLabelLeft As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Left", New FlowPropertyInfo("Left location (in pixels)", "Layout"))
+    Dim mLabelTop As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Top", New FlowPropertyInfo("Top location (in pixels)", "Layout"))
+    Dim mLabelHeight As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Height", New FlowPropertyInfo("Height (in pixels)", "Layout"))
+    Dim mLabelWidth As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Width", New FlowPropertyInfo("Width (in pixels)", "Layout"))
+
+    Public Sub New()
+    End Sub
+
+    Protected Overrides Sub Execute(ByVal ctx As SpecificationContext)
+        ' ToDo: Validate inputs
+        Dim labelName As String = mLabelName.Value
+        Dim labelText As String = mLabelText.Value
+        Dim formName As String = mFormName.Value
+        Dim left As Integer = 0
+        If Integer.TryParse(mLabelLeft.Value, left) Then
+        End If
+        Dim top As Integer = mLabelTop.Value
+        If Integer.TryParse(mLabelTop.Value, top) Then
+        End If
+        Dim height As Integer = mLabelHeight.Value
+        If Integer.TryParse(mLabelHeight.Value, height) Then
+        End If
+        Dim width As Integer = mLabelWidth.Value
+        If Integer.TryParse(mLabelWidth.Value, width) Then
+        End If
+        Dim project = ctx.Project
+
+        ' Try to get the form
+        Dim form As FormNavigationStep = Nothing
+        If project.Navigation.TryGetStep(formName, form) Then
+            Dim ctrlColl As ControlCollection = form.Form.Controls
+            ctrlColl.Add(GetType(Forms.Label), labelName)
+            Dim label As Label = Nothing
+            If project.Navigation.TryGetControl(Of Label)(labelName, label) Then
+                label.Height = height
+                label.Top = top
+                label.Left = left
+                label.Width = width
+                label.Text = label.Text
+            End If
+        End If
+
+        Me.SetState(NodeExecutionState.Successful)
+    End Sub
+End Class
+
+<Task("Get Release Results", "embedded://DriveWorksPRGExtender.bomb.bmp", "PRG Tools", True)>
+Public Class PRGGetModelList
+    Inherits Task
+    Private mInputValue As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Input Value", New FlowPropertyInfo("Models to be released", "Input"))
+    Private mDeferredDrawings As FlowProperty(Of String) = Me.Properties.RegisterStringProperty("Deferred Drawings", New FlowPropertyInfo("Pipe-delimited list of drawings to be deferred", "Input"))
+    Private mOverwrite As FlowProperty(Of Boolean) = Me.Properties.RegisterBooleanProperty("Overwrite Models", New FlowPropertyInfo("Overwrite existing models and drawings", "Settings"))
+
+    Public Sub New()
+        Me.Outputs.Register("Output", "Output value", GetType(String), "Output")
+    End Sub
+
+    Protected Overrides Sub Execute(ctx As SpecificationContext)
+        Dim inputString As String = mInputValue.Value
+
+        ' Create a release tracker object
+        Dim relTracker = New ReleaseComponentReportTracker(ctx.Report)
+
+        ' Create an environment
+        Dim env As New ReleaseEnvironment() With {
+            .Flags = If(mOverwrite.Value, ReleasedComponentFlags.ForceOverwrite, ReleasedComponentFlags.None),
+            .OverwriteReleasedComponents = ctx.Environment.CanEditCompletedSpecifications AndAlso ctx.Environment.OverwriteReleasedComponents
+        }
+
+        ' Make sure that the deferred drawing list has no blanks and has an extension on all of the deferred drawing names, unless it's an asterisk
+        Dim defDrwList() As String = mDeferredDrawings.Value.Split(New String() {"|"}, StringSplitOptions.RemoveEmptyEntries).Select(Function(drwName) As String
+                                                                                                                                         If String.Equals(drwName, "*", StringComparison.Ordinal) OrElse
+                                                                                                                                 Not String.IsNullOrEmpty(Path.GetExtension(drwName)) Then
+                                                                                                                                             Return drwName
+                                                                                                                                         End If
+                                                                                                                                         Return String.Format("{0}.slddrw", drwName)
+                                                                                                                                     End Function)
+        Dim deferredDrawingList As String = String.Join("|", defDrwList)
+        ' Perform the release and get the results
+        Dim relResults = ReleaseComponentHelper.Release(env, ctx, inputString, relTracker, deferredDrawingList)
+
+        ' Log the results in the database
+        ctx.Group.ReleasedComponents.SaveReleaseResults(relResults)
+
+        ' Parse the results to get the list of files
+        Dim fileList As New List(Of String)
+        For Each comp In relResults.Components
+            ' Do we need to go through the LoopVariations? Do we need to recurse?
+            If comp.LoopVariations.Count > 1 Then
+                For Each loopComp In comp.LoopVariations
+                    If loopComp.LoopVariations.Count > 1 Then
+                        ' This is getting loopy
+                    End If
+                Next loopComp
+            End If
+            Dim swComp As ReleasedSolidWorksComponent = TryCast(comp, ReleasedSolidWorksComponent)
+            If swComp IsNot Nothing Then fileList.Add(swComp.TargetPath)
+        Next comp
+
+
+        Dim outputString As String = String.Empty
+        outputString = String.Join("|", fileList)
+        FulfillOutput("Output", outputString)
+
+    End Sub
+
+    ''' <summary>
+    ''' Internal function to populate an output node
+    ''' </summary>
+    ''' <param name="name">Name of the output node</param>
+    ''' <param name="value">Value to pass out of the task</param>
+    ''' <returns>True if successful</returns>
+    Private Function FulfillOutput(name As String, value As Object) As Boolean
+        Dim result As Boolean = False
+        Try
+            For index As Int16 = 0 To Me.Outputs.Count - 1
+                If Me.Outputs.Item(index).Name = name Then
+                    Me.Outputs.Item(index).Fulfill(value)
+                    result = True
+                    Exit For
+                End If
+            Next index
+            Return result
+        Catch ex As Exception
+            Return False
+        End Try
+    End Function
+
+End Class

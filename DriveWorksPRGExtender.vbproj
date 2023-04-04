@@ -116,6 +116,7 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
     <Compile Include="PRGGenTasks.vb" />
+    <Compile Include="PRGRevTableGenTasks.vb" />
     <Compile Include="PRGSpecTasks.vb" />
   </ItemGroup>
   <ItemGroup>

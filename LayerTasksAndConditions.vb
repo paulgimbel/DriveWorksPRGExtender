@@ -416,7 +416,7 @@ Public Class DriveLayerVisibility
     Inherits GenerationTask
 
     Private Const LAYER_NAMES As String = "LayerNames"
-    Private Const LAYER_STATE As String = "LayerState"
+    Private Const LAYER_VISIBLE As String = "LayerVisible"
 
     Private Const TASKNAME = "Drive Drawing Layer Visibility"
 
@@ -428,8 +428,17 @@ Public Class DriveLayerVisibility
     Public Overrides ReadOnly Property Parameters As ComponentTaskParameterInfo()
         Get
             Return New ComponentTaskParameterInfo() {
-                    New ComponentTaskParameterInfo(LAYER_NAMES, "Layer Names", "Pipe-Delimited list of layers to show or hide", "Inputs"),
-                    New ComponentTaskParameterInfo(LAYER_STATE, "Layer State", "'Show' to show the specified layers or 'Hide' to hide them.", "Inputs", New ComponentTaskParameterMetaData(PropertyBehavior.StandardOptionDynamicDefault, GetType(VisibleState), VisibleState.Show))
+                    New ComponentTaskParameterInfo(LAYER_NAMES,
+                                                   "Layer Names",
+                                                   "Pipe-Delimited list of layers to show or hide",
+                                                   "Inputs",
+                                                    New ComponentTaskParameterMetaData(PropertyBehavior.StandardOptionDynamicManual)),
+                    New ComponentTaskParameterInfo(LAYER_VISIBLE,
+                                                   "Layer Visible",
+                                                   "'Show' to show the specified layers or 'Hide' to hide them.",
+                                                   "Inputs",
+                                                   New ComponentTaskParameterMetaData(PropertyBehavior.StandardOptionDynamicManual,
+                                                                                      GetType(VisibleState), VisibleState.Show))
                     }
         End Get
     End Property
@@ -452,7 +461,7 @@ Public Class DriveLayerVisibility
         ' Check to see that a valid Visibility State was provided
         Dim layerNameList = layerNames.Split("|").ToList
         Dim layerState As VisibleState
-        If Not Me.Data.TryGetParameterValue(Of VisibleState)(LAYER_STATE, layerState) Then
+        If Not Me.Data.TryGetParameterValue(Of VisibleState)(LAYER_VISIBLE, layerState) Then
             Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, "No layer state given.")
             Return
         End If
@@ -500,8 +509,15 @@ Public Class ChangeLayerProps
     Private Const LAYER_STYLE As String = "LayerStyle"
     Private Const LAYER_WEIGHT As String = "LayerWidth"
     Private Const LAYER_PRINT As String = "LayerPrint"
+    Private Const LAYER_VISIBLE As String = "LayerVisible"
 
     Private Const TASKNAME = "Change Layer Properties"
+
+    Private Enum VisibleState
+        Hide = 0
+        Show = 1
+    End Enum
+
     Private Enum LineStyles
         DEFAULTSTYLE = swLineStyles_e.swLineDEFAULT
         CONTINUOUS = swLineStyles_e.swLineCONTINUOUS
@@ -545,6 +561,12 @@ Public Class ChangeLayerProps
                                                    "Description to be added to the layer (leave blank to keep current value)",
                                                    "Settings",
                                                     New ComponentTaskParameterMetaData(PropertyBehavior.StandardOptionDynamicManual)),
+                    New ComponentTaskParameterInfo(LAYER_VISIBLE,
+                                                   "Layer Visible",
+                                                   "'Show' to show the specified layers or 'Hide' to hide them.",
+                                                   "Inputs",
+                                                   New ComponentTaskParameterMetaData(PropertyBehavior.StandardOptionDynamicManual,
+                                                                                      GetType(VisibleState), VisibleState.Show)),
                     New ComponentTaskParameterInfo(LAYER_COLOR,
                                                    "Line Color",
                                                    "Color to make the entities on the layer (named colors or Red|Green|Blue, ex. 'Red' or 255|0|0 for red)",
@@ -574,9 +596,12 @@ Public Class ChangeLayerProps
 
     Public Overrides Sub Execute(model As SldWorksModelProxy, component As ReleasedComponent, generationSettings As GenerationSettings)
         Dim warnings As New List(Of String)
+        Dim successes As New List(Of String)
         Dim layerName As String = String.Empty
         Dim layerNewName As String = String.Empty
         Dim layerDesc As String = String.Empty
+        Dim layerVisible As VisibleState = VisibleState.Show
+        Dim driveVisible As Boolean = False
         Dim driveStyle As Boolean = False
         Dim driveWeight As Boolean = False
         Dim driveColor As Boolean = False
@@ -598,6 +623,12 @@ Public Class ChangeLayerProps
         End If
         If Not Me.Data.TryGetParameterValue(LAYER_DESC, layerDesc) Then
             Me.Report.WriteEntry(ReportingLevel.Verbose, ReportEntryType.Information, "Model Generation Task", TASKNAME, "No new layer description provided", "Existing value will be used")
+        End If
+        If Not Me.Data.TryGetParameterValue(Of VisibleState)(LAYER_VISIBLE, layerVisible) Then
+            Me.Report.WriteEntry(ReportingLevel.Verbose, ReportEntryType.Information, "Model Generation Task", TASKNAME, "No new layer visibility provided", "Existing value will be used")
+            driveVisible = False
+        Else
+            driveVisible = True
         End If
         If Not Me.Data.TryGetParameterValue(LAYER_COLOR, layerColorString) Then
             Me.Report.WriteEntry(ReportingLevel.Verbose, ReportEntryType.Information, "Model Generation Task", TASKNAME, "No new layer color provided", "Existing value will be used")
@@ -668,12 +699,34 @@ Public Class ChangeLayerProps
             If layer Is Nothing Then
                 Me.SetExecutionResult(TaskExecutionResult.SuccessWithWarnings, "A layer with that name could not be found.")
             Else
-                If Not String.IsNullOrEmpty(layerNewName) Then layer.Name = layerNewName
-                If Not String.IsNullOrEmpty(layerDesc) Then layer.Description = layerDesc
-                If driveStyle Then layer.Style = layerStyle
-                If driveColor Then layer.Color = layerColorInt
-                If driveWeight Then layer.Width = layerWeight
-                If drivePrint Then layer.Printable = layerPrintable
+                If Not String.IsNullOrEmpty(layerNewName) Then
+                    layer.Name = layerNewName
+                    successes.Add(String.Format("Layer name set to '{0}'", layer.Name))
+                End If
+                If Not String.IsNullOrEmpty(layerDesc) Then
+                    layer.Description = layerDesc
+                    successes.Add(String.Format("Layer description set to '{0}'", layer.Description))
+                End If
+                If driveVisible Then
+                    layer.Visible = (layerVisible = VisibleState.Show)
+                    successes.Add(String.Format("Layer visibility set to {0}", layer.Visible.ToString()))
+                End If
+                If driveStyle Then
+                    layer.Style = layerStyle
+                    successes.Add(String.Format("Layer line style set to {0}", layer.Style.ToString()))
+                End If
+                If driveColor Then
+                    layer.Color = layerColorInt
+                    successes.Add(String.Format("Layer color set to {0}", layer.Color.ToString()))
+                End If
+                If driveWeight Then
+                    layer.Width = layerWeight
+                    successes.Add(String.Format("Layer line weight set to {0}", layer.Width.ToString()))
+                End If
+                If drivePrint Then
+                    layer.Printable = layerPrintable
+                    successes.Add(String.Format("Layer will print set to {0}", layer.Printable.ToString()))
+                End If
             End If
         Catch ex As Exception
             Me.SetExecutionResult(TaskExecutionResult.Failed, String.Format("Exception Error: {0}", ex.Message))
@@ -887,7 +940,7 @@ Public Class MoveAllOnLayer
                                 Next
                             End If
                         End If
-                            If includeHatch Then
+                        If includeHatch Then
                             Dim items = layer.GetItems(swLayerItemsOption_e.swLayerItemsOption_SketchHatch)
                             If items IsNot Nothing Then
                                 For i = 0 To UBound(items)
